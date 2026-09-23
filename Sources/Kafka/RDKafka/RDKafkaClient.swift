@@ -466,7 +466,11 @@ public final class RDKafkaClient: Sendable {
                 return json
             }
         } catch {
-            assertionFailure("Error occurred when decoding JSON statistics: \(error) when decoding \(jsonStr)")
+            // Skip unparsable stats instead of crashing — observability must not disrupt the client.
+            self.logger.info(
+                "Skipping unparsable Kafka statistics sample",
+                metadata: ["error": "\(error)"]
+            )
         }
         return nil
     }

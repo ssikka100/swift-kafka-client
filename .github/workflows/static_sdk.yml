@@ -1,0 +1,31 @@
+name: Static Linux SDK
+
+permissions:
+  contents: read
+
+on:
+  workflow_call:
+
+jobs:
+  static-sdk:
+    name: Static Linux SDK (musl)
+    runs-on: ubuntu-latest
+    container:
+      # Pinned to match the Static Linux SDK installed below; bump both together.
+      image: swift:6.2.3-jammy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install the Static Linux SDK
+        run: |
+          apt-get update -y -q && apt-get install -y -q curl
+          curl -fL -o /tmp/static-sdk.tar.gz \
+            https://download.swift.org/swift-6.2.3-release/static-sdk/swift-6.2.3-RELEASE/swift-6.2.3-RELEASE_static-linux-0.0.1.artifactbundle.tar.gz
+          swift sdk install /tmp/static-sdk.tar.gz
+      - name: Build for x86_64-swift-linux-musl
+        # SWIFT_KAFKA_MUSL drops Cyrus SASL and links the SDK-bundled BoringSSL — see Package.swift.
+        env:
+          SWIFT_KAFKA_MUSL: "1"
+        run: swift build --swift-sdk x86_64-swift-linux-musl

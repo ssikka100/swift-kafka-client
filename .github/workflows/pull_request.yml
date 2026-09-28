@@ -25,7 +25,10 @@ jobs:
       linux_nightly_next_arguments_override: "-Xswiftc -warnings-as-errors --explicit-target-dependency-import-check error"
       linux_nightly_main_arguments_override: "-Xswiftc -warnings-as-errors --explicit-target-dependency-import-check error"
 
-  construct-cxx-matrix:
+  static-sdk:
+    name: Static Linux SDK
+    uses: ./.github/workflows/static_sdk.yml
+
     name: Construct Cxx interop matrix
     runs-on: ubuntu-latest
     outputs:

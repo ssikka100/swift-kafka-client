@@ -13,9 +13,16 @@
 //
 //===----------------------------------------------------------------------===//
 
+import Foundation
 import PackageDescription
 
-let rdkafkaExclude = [
+// The Swift Static Linux SDK (musl) bundles BoringSSL but not libsasl2, and its `openssl`
+// pkg-config module doesn't resolve for the cross-target. Set `SWIFT_KAFKA_MUSL=1` when building
+// against a musl SDK to drop Cyrus SASL and link the SDK's ssl/crypto directly. SwiftPM can't
+// detect the target libc during manifest evaluation, so this is driven by an environment variable.
+let buildingForMusl = ProcessInfo.processInfo.environment["SWIFT_KAFKA_MUSL"] != nil
+
+var rdkafkaExclude = [
     "./librdkafka/src/CMakeLists.txt",
     "./librdkafka/src/Makefile",
     "./librdkafka/src/README.lz4.md",
@@ -33,6 +40,22 @@ let rdkafkaExclude = [
     "./librdkafka/src/rdkafka_sasl_oauthbearer_oidc.c",
     "./librdkafka/src/rdhttp.c",
 ]
+
+var crdkafkaLinkerSettings: [LinkerSetting] = [
+    .linkedLibrary("sasl2"),
+    .linkedLibrary("z"),  // zlib
+]
+
+if buildingForMusl {
+    // rdkafka_sasl_cyrus.c includes <sasl/sasl.h> unconditionally; exclude it since the musl SDK
+    // has no Cyrus SASL. Link the SDK-bundled BoringSSL (ssl/crypto) explicitly and drop sasl2.
+    rdkafkaExclude.append("./librdkafka/src/rdkafka_sasl_cyrus.c")
+    crdkafkaLinkerSettings = [
+        .linkedLibrary("z"),  // zlib
+        .linkedLibrary("ssl"),  // BoringSSL, bundled in the Static Linux SDK
+        .linkedLibrary("crypto"),
+    ]
+}
 
 let package = Package(
     name: "swift-kafka-client",
@@ -69,17 +92,17 @@ let package = Package(
                 .product(name: "libzstd", package: "zstd"),
             ],
             exclude: rdkafkaExclude,
-            sources: ["./librdkafka/src/"],
+            sources: [
+                "./librdkafka/src/",
+                "./custom/musl_compat",  // BoringSSL shims (inert on glibc/macOS)
+            ],
             publicHeadersPath: "./include",
             cSettings: [
                 // dummy folder, because config.h is included as "../config.h" in librdkafka
                 .headerSearchPath("./custom/config/dummy"),
                 .headerSearchPath("./librdkafka/src"),
             ],
-            linkerSettings: [
-                .linkedLibrary("sasl2"),
-                .linkedLibrary("z"),  // zlib
-            ]
+            linkerSettings: crdkafkaLinkerSettings
         ),
         .target(
             name: "Kafka",
@@ -118,6 +141,18 @@ let package = Package(
         ),
     ]
 )
+
+// A tiny executable that links the library, built only for musl. A library `swift build` doesn't
+// perform a final executable link, so this gives the Static SDK CI real link coverage — proving
+// the BoringSSL shims resolve and no undefined symbols remain. Absent from normal builds.
+if buildingForMusl {
+    package.targets.append(
+        .executableTarget(
+            name: "MuslLinkCheck",
+            dependencies: ["Kafka"]
+        )
+    )
+}
 
 for target in package.targets {
     switch target.type {

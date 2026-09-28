@@ -22,3 +22,8 @@ jobs:
   release-builds:
     name: Release builds
     uses: ./.github/workflows/release_builds.yml
+
+  static-sdk:
+    name: Static Linux SDK
+    uses: ./.github/workflows/static_sdk.yml
+

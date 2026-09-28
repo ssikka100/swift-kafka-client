@@ -131,7 +131,13 @@
 // libcrypto
 #define OPENSSL_SUPPRESS_DEPRECATED "OPENSSL_SUPPRESS_DEPRECATED"
 // libsasl2
+// Cyrus SASL (GSSAPI/Kerberos) needs libsasl2, which the Swift Static Linux SDK (musl) does not
+// provide. Disable it there — SCRAM/PLAIN remain available; only GSSAPI is lost.
+#if defined(__linux__) && !defined(__GLIBC__)
+#define WITH_SASL_CYRUS 0
+#else
 #define WITH_SASL_CYRUS 1
+#endif
 // libzstd
 #define WITH_ZSTD 1
 // libcurl
